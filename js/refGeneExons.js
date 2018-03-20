@@ -59,7 +59,8 @@ function getAnnotation (index, perLaneHeight, offset) {
 	};
 }
 
-function drawIntroArrows (ctx, xStart, xEnd, endY, segments, strand) {
+// draw arrows in introns (zoom if necessary to see them)
+function drawIntroArrows (vg, xStart, xEnd, endY, segments, strand) {
 	if (xEnd - xStart < 10) {
 		return;
 	}
@@ -72,32 +73,21 @@ function drawIntroArrows (ctx, xStart, xEnd, endY, segments, strand) {
 				Math.abs(seg[1] - i) < gapSize ||
 				Math.abs(seg[1] - i - arrowSize) < gapSize));
 
+	var plusStrand = [[i, endY - arrowSize, i + arrowSize, endY], [i, endY + arrowSize, i + arrowSize, endY]],
+		minusStrand = [[i + arrowSize, endY - arrowSize, i, endY], [i + arrowSize, endY + arrowSize, i, endY]];
+
 		if (_.isEmpty(found)) {
 			if (strand === '+') {
-				ctx.beginPath();
-				ctx.moveTo(i, endY - arrowSize);
-				ctx.lineTo(i + arrowSize, endY );
-				ctx.stroke();
-				ctx.beginPath();
-				ctx.moveTo(i, endY + arrowSize);
-				ctx.lineTo(i + arrowSize, endY );
-				ctx.stroke();
+				vg.drawPoly(plusStrand, {fillStyle: [0, 0, 0], strokeStyle: [0, 0, 0], lineWidth: ""});
 			} else { // "-" strand
-				ctx.beginPath();
-				ctx.moveTo(i + arrowSize, endY - arrowSize);
-				ctx.lineTo(i, endY );
-				ctx.stroke();
-				ctx.beginPath();
-				ctx.moveTo(i + arrowSize, endY + arrowSize);
-				ctx.lineTo(i, endY);
-				ctx.stroke();
+    			vg.drawPoly(minusStrand, {fillStyle: [0, 0, 0], strokeStyle: [0, 0, 0], lineWidth: ""});
 			}
 		}
 	}
 }
 
-class RefGeneAnnotation extends React.Component {
-	componentWillMount() {
+var RefGeneAnnotation = React.createClass({
+	componentWillMount: function () {
 		var events = rxEvents(this, 'mouseout', 'mousemove', 'mouseover');
 
 		// Compute tooltip events from mouse events.
@@ -112,29 +102,24 @@ class RefGeneAnnotation extends React.Component {
 					})) // look up current data
 					.concat(Rx.Observable.of({open: false}));
 			}).subscribe(this.props.tooltip);
-	}
-
-	componentWillUnmount() {
+	},
+	componentWillUnmount: function () {
 		this.ttevents.unsubscribe();
-	}
-
-	componentDidMount() {
+	},
+	componentDidMount: function () {
 		var {width, height} = this.props;
 		this.vg = vgcanvas(ReactDOM.findDOMNode(this.refs.canvas), width, height);
 		this.draw(this.props);
-	}
-
+	},
 	shouldComponentUpdate() {
 		return false;
-	}
-
+	},
 	componentWillReceiveProps(newProps) {
 		if (this.vg && !_.isEqual(newProps, this.props)) {
 			this.draw(newProps);
 		}
-	}
-
-	computeAnnotationLanes = ({position, refGene, height, column}) => {
+	},
+	computeAnnotationLanes({position, refGene, height, column}) {
 		var fieldType = _.get(column, 'fieldType', undefined),
 			newAnnotationLanes;
 
@@ -177,9 +162,8 @@ class RefGeneAnnotation extends React.Component {
 		}
 		// cache for tooltip
 		this.annotationLanes = newAnnotationLanes;
-	};
-
-	draw = (props) => {
+	},
+	draw: function (props) {
 		var {width, layout, mode} = props;
 		this.computeAnnotationLanes(props);
 		var {lanes, perLaneHeight, laneOffset, annotationHeight} = this.annotationLanes;
@@ -190,8 +174,8 @@ class RefGeneAnnotation extends React.Component {
 		if (!width || !layout) {
 			return;
 		}
-		var vg = this.vg,
-			ctx = vg.context();
+		var vg = this.vg;
+//			ctx = vg.context();
 
 		if (vg.width() !== width) {
 			vg.width(width);
@@ -225,22 +209,21 @@ class RefGeneAnnotation extends React.Component {
 						[pGeneStart, pGeneEnd] = toPx([gene.txStart, gene.txEnd]);
 
 					// draw a line across the gene
-					ctx.fillStyle = shade2;
-					ctx.fillRect(pGeneStart, lineY, pGeneEnd - pGeneStart, 1);
+					var lineOnGene = [[pGeneStart, lineY, pGeneEnd - pGeneStart, 1]];
+					vg.drawRectangles(lineOnGene, {fillStyle: shade2, strokeStyle: 'white', lineWdth: .1});
 
-					drawIntroArrows (ctx, pGeneStart, pGeneEnd, lineY, segments, mode === 'coordinate' ? gene.strand : '+');
+					drawIntroArrows (vg, pGeneStart, pGeneEnd, lineY, segments, mode === 'coordinate' ? gene.strand : '+');
 
 					// draw each segment
 					_.each(segments, ([pstart, pend, shade, y, h]) => {
-						ctx.fillStyle = shade;
-						ctx.fillRect(pstart, y, (pend - pstart) || 1, h);
+						var segment = [[pstart, y, (pend - pstart) || 1, h]];
+						vg.drawRectangles(segment, {fillStyle: shade, strokeStyle: "", lineWdth: .1});
 					});
 				});
 			});
 		});
-	};
-
-	tooltip = (ev) => {
+	},
+	tooltip: function (ev) {
 		var {layout, column: {assembly}} = this.props;
 
 		if (!layout) { // gene model not loaded
@@ -284,9 +267,8 @@ class RefGeneAnnotation extends React.Component {
 		return {
 			rows: rows
 		};
-	};
-
-	render() {
+	},
+	render: function () {
 		return (
 			<canvas
 				className='Tooltip-target'
@@ -294,10 +276,11 @@ class RefGeneAnnotation extends React.Component {
 				onMouseOut={this.on.mouseout}
 				onMouseOver={this.on.mouseover}
 				onClick={this.props.onClick}
+				onDblClick={this.props.onDblClick}
 				ref='canvas' />
 		);
 	}
-}
+});
 
 //widgets.annotation.add('gene', props => <RefGeneAnnotation {...props}/>);
 
