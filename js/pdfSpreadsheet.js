@@ -8,6 +8,9 @@ require('./pdfSegmented');
 require('./pdfSamples');
 var _ = require('./underscore_ext');
 
+//api agnostic gene drawer
+var drawGene = require('./drawGene');
+
 var totalWidth = cols =>
 	(cols.length - 1) * styles.column.margin +
 		_.reduce(_.pluck(cols, 'width'), (x, y) => x + y, 0);
@@ -26,6 +29,7 @@ var download = state => {
 		var PDFDocument = require('pdfkit');
 		var blobStream = require('blob-stream');
 		var vgpdf = require('./vgpdf');
+		var drawGene = require('./drawGene');
 		let columns = state.columnOrder.map(id => state.columns[id]),
 			width = totalWidth(columns),
 			// pdfkit zlib is pathologically slow.
@@ -34,10 +38,12 @@ var download = state => {
 			vg = vgpdf(doc, pdfImgHeight * width / state.zoom.height, pdfImgHeight),
 			offsets = getOffsets(columns);
 
+
 		columns.forEach((column, i) =>
 			vg.translate(offsets[i], 0, () => {
 				widgets.pdf(state.columnOrder[i], column, vg, state, i);
 			}));
+
 		doc.end();
 
 		stream.on('finish', () => {
